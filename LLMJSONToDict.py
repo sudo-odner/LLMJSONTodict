@@ -127,7 +127,7 @@ class LLMJSONToDict:
 
         parts = list()
         _local_idx = 0
-        while self._cursor < len(self.text):
+        while self._cursor + _local_idx < len(self.text):
             rune = self.text[self._cursor + _local_idx]
             # If last rune is not set
             if _last_rune == '' and (rune == '{' or rune == '['):
@@ -271,6 +271,6 @@ class LLMJSONToDict:
         else:
             return list(result), error
 
-test_data = "{'some': [[1, 'sone'],2,3,4,5], // [this] this works [, is comment: yep, yep \n other: 'text'}"
+test_data = "{"
 worker = LLMJSONToDict()
 print(worker.custom_load(test_data))

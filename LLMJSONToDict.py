@@ -1,13 +1,15 @@
 class LLMJSONToDict:
     def __init__(self):
-        self._cursor = 0
-        self.text = ""
+        self._cursor_start = 0
+        self._cursor_end = 0
+        self._text = ""
         self._error_status = False
         self._error_info = ""
 
-    def new_text(self, text):
-        self._cursor = 0
-        self.text = text
+    def _new_text(self, new_text):
+        self._cursor_start = 0
+        self._cursor_end = 0
+        self._text = new_text
         self._error_status = False
         self._error_info = ""
 
@@ -25,8 +27,8 @@ class LLMJSONToDict:
 
     # Filter key in JSON object.
     # Key in JSON always is string, some time one word without single or dabble quotes.
-    # If text is string with single or dabble quotes -> add all body inside like key
-    # Else text without single or dabble quotes -> check space in name -> if True add key, else set Error
+    # If _text is string with single or dabble quotes -> add all body inside like key
+    # Else _text without single or dabble quotes -> check space in name -> if True add key, else set Error
     def _filter_key(self, text: str) -> str:
         text = text.strip()
         if (text[0] and text[-1] == "'") or (text[0] and text[-1] == '"'):
@@ -38,23 +40,34 @@ class LLMJSONToDict:
                 return text
         return text
 
+    # For check float value
+    def _is_float(self, element: any) -> bool:
+        try:
+            float(element)
+            return True
+        except ValueError:
+            return False
+
     # Filter value
-    # Value in JSON have some type: array(list), object(dict), string, integer, boolean, null(None)
-    # This code convert string, integer, boolean, null(None)
+    # In JSON have some type: array(list), object(dict), string, number (integer | float), boolean, null(None)
+    # This code convert string, number (integer | float), boolean, null(None)
     # If we have str with zero rune -> return None
-    def _filter_value(self, text: str | list | dict) -> list | dict | str | int | bool | None :
-        # If text is array or dict, return array or dict
+    def _filter_value(self, text: str | list | dict) -> list | dict | str | int | float | bool | None :
+        # If _text is array or dict, return array or dict
         if (type(text) == list) or (type(text) == dict):
             return text
         # Else data is not array and dict, set type
+        text = text.replace("\n", ' ')
         text = text.strip()
-        # If text is Zero return None
+        # If _text is Zero return None
         if len(text) == 0:
             return None
         elif (text[0] and text[-1] == "'") or (text[0] and text[-1] == '"'):
             return text[1:-1]
         elif text.isnumeric():
             return int(text)
+        elif self._is_float(text):
+            return float(text)
         elif text.lower().find("true") != -1:
             return True
         elif text.lower().find("false") != -1:
@@ -112,7 +125,7 @@ class LLMJSONToDict:
     # 1. Deepening -> '{', '}', '[', ']'. They are necessary for deep recursion of the search for a certain type element.
     # 2. Separation -> ',', ':', '}', ']'. They are necessary to perform the separation of elementsю
     # 3. Contextual -> '/', '#', '\n', '"', "'". They needed for understand reading rune. In data string? This is comment?
-    def next(self) -> list | dict:
+    def _next(self) -> list | dict:
         _last_rune = ""
 
         _context_value_dict = False
@@ -126,12 +139,12 @@ class LLMJSONToDict:
         _context_str = False
 
         parts = list()
-        _local_idx = 0
-        while self._cursor + _local_idx < len(self.text):
-            rune = self.text[self._cursor + _local_idx]
+        while self._cursor_end < len(self._text):
+            rune = self._text[self._cursor_end]
             # If last rune is not set
             if _last_rune == '' and (rune == '{' or rune == '['):
                 _last_rune = rune
+                self._cursor_start = self._cursor_end + 1
             # If last rune is '['
             elif _last_rune == '[':
                 if rune == ':':
@@ -143,31 +156,31 @@ class LLMJSONToDict:
                     # If rune have ',' in array - we create new part from self.context + 1 to self.context + _local_idx
                     # After set _local_idx
                     # if part is '', not append in parts
-                    _element_part = self.text[self._cursor+1:(self._cursor+_local_idx)]
+                    _element_part = self._text[self._cursor_start:self._cursor_end]
+                    self._cursor_start = self._cursor_end + 1
                     if _element_part.strip() != '':
                         parts.append(_element_part)
-                    self._cursor += _local_idx
-                    _local_idx = 0
                 elif rune == ']':
                     # If rune have ']' in array - we create last part from self.context + 1 to self.context + _local_idx
                     # After set _local_idx
                     # if part is '', not append in parts
                     # After return from recursion
-                    _element_part = self.text[self._cursor+1:(self._cursor+_local_idx)]
-                    parts.append(_element_part)
-                    self._cursor += _local_idx
-                    _local_idx = 0
+                    _element_part = self._text[self._cursor_start:self._cursor_end]
+                    self._cursor_start = self._cursor_end + 1
+                    if _element_part.replace("\n", " ").strip() != "":
+                        parts.append(_element_part)
+
                     return self._create_array(parts)
                 elif rune == '}':
                     # If rune have '}' in array - set error
                     self._error("Unexpected end of array")
                 elif rune == '{' or rune == '[':
                     # If find new object or array
-                    # Set new self._cursor += _local_idx, and set _local_idx
+                    # Set new self._cursor_start += _local_idx, and set _local_idx
                     # After recursion add new part
-                    self._cursor += _local_idx
-                    _local_idx = 0
-                    _element_part = self.next()
+                    self._cursor_start = self._cursor_end
+                    _element_part = self._next()
+                    self._cursor_start = self._cursor_end + 1
                     parts.append(_element_part)
                     # If error inside then go out from recursion
                     if self._error_status:
@@ -180,43 +193,44 @@ class LLMJSONToDict:
                     #   Else wait when find \n, then add key and open context_dict to add value
                     if _context_comment:
                         if _context_tab:
-                            _element_part = self.text[_context_tab_index+1:(self._cursor+_local_idx)]
+                            _element_part = self._text[_context_tab_index:self._cursor_end]
+                            self._cursor_start = self._cursor_end + 1
                             if _element_part.strip() != '':
                                 parts.append(_element_part)
                                 _context_comment = False
                                 _context_tab = False
                                 _context_value_dict = True
-                            self._cursor += _local_idx
-                            _local_idx = 0
                             pass
                         pass
                     else:
-                        _element_part = self.text[self._cursor+1:(self._cursor+_local_idx)]
+                        _element_part = self._text[self._cursor_start:self._cursor_end]
+                        self._cursor_start = self._cursor_end + 1
                         if _element_part.strip() != '':
                             parts.append(_element_part)
                             _context_value_dict = True
-                        self._cursor += _local_idx
-                        _local_idx = 0
+                            _context_comment = False
+                            _context_tab = False
                 elif rune == ',':
                     # If find ',' check comment.
                     #   If we have open context_dict -> add value
                     #   Else next rune
                     if _context_value_dict:
-                        _element_part = self.text[self._cursor+1:(self._cursor+_local_idx)]
+                        _element_part = self._text[self._cursor_start:self._cursor_end]
+                        self._cursor_start = self._cursor_end + 1
                         if _element_part.strip() != '':
                             parts.append(_element_part)
                             _context_value_dict = False
-                        self._cursor += _local_idx
-                        _local_idx = 0
+                    else:
+                        self._cursor_start = self._cursor_end + 1
                 elif rune == '}':
                     # If find '}' check comment.
                     #   If we have open context_dict -> add value
                     #   Else return dict
                     if _context_value_dict:
-                        _element_part = self.text[self._cursor+1:(self._cursor+_local_idx)]
-                        parts.append(_element_part)
-                        self._cursor += _local_idx
-                        _local_idx = 0
+                        _element_part = self._text[self._cursor_start:self._cursor_end]
+                        self._cursor_start = self._cursor_end + 1
+                        if _element_part.replace("\n", " ").strip() != "":
+                            parts.append(_element_part)
 
                     return self._create_dict(parts)
                 elif rune == ']':
@@ -225,14 +239,14 @@ class LLMJSONToDict:
                         self._error("Unexpected end of object")
                         return list()
                 # If find new object or array
-                elif rune == '[':
+                elif rune == '[' or rune == '{' :
                     # If find new object or array
-                    # Set new self._cursor += _local_idx, and set _local_idx
+                    # Set new self._cursor_start += _local_idx, and set _local_idx
                     # After recursion add new part
                     if _context_value_dict:
-                        self._cursor += _local_idx
-                        _local_idx = 0
-                        _element_part = self.next()
+                        self._cursor_start = self._cursor_end
+                        _element_part = self._next()
+                        self._cursor_start = self._cursor_end + 1
                         parts.append(_element_part)
                         _context_value_dict = False
                         # If error inside then go out from recursion
@@ -245,32 +259,26 @@ class LLMJSONToDict:
 
 
             # For understand start and end index comment LLM
-            if (not _context_comment) and (not _context_str) and (rune == '/' or rune == '#'):
+            if (not _context_comment) and (not _context_str) and (rune == '/' or rune == '#') and _last_rune != '':
                 _context_comment = True
-                _context_comment_index = self._cursor + _local_idx
-            if (not _context_str) and rune == '\n':
+                _context_comment_index = self._cursor_end
+            if _context_comment and (not _context_str) and rune == '\n' and _last_rune != '':
                 _context_tab = True
-                _context_tab_index = self._cursor + _local_idx
+                _context_tab_index = self._cursor_end
 
             # For understand context is string or not
-            if (not _context_str) and (rune == "'" or rune == '"'):
+            if (not _context_str) and (rune == "'" or rune == '"') and _last_rune != '':
                 _last_str = rune
                 _context_str = True
             elif _context_str and (_last_str == rune):
                 _last_str = ""
                 _context_str = False
 
-            _local_idx += 1
+            self._cursor_end += 1
         return parts
 
-    def custom_load(self, json: str) -> (list, str):
-        self.new_text(json)
-        result, error = self.next(), self._error_info
-        if type(result) == list:
-            return result, error
-        else:
-            return list(result), error
+    def custom_load(self, json: str) -> (list | dict, str):
+        self._new_text(json)
 
-test_data = "{"
-worker = LLMJSONToDict()
-print(worker.custom_load(test_data))
+        result, error = self._next(), self._error_info
+        return result, error

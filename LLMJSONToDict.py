@@ -20,13 +20,13 @@ class LLMJSONToDict:
 
     # Custom error
     def _error_invalid_char(self, info: str):
-        self._error("""Invalid characters. Use single or dabble quotes for siting.""" + "Data: " + f'"{info}"')
+        self._error("""Invalid characters. Use single or dabble quotes for siting.""" + "Data: " + f"({info})")
 
     def _error_invalid_dict(self):
         self._error("""Length of data key is not equal to length of data value""")
 
     def _error_element_not_closed(self, info: str):
-        self._error("""Element is not closed""" + "Data: " + f'"{info}"')
+        self._error("""Element is not closed""" + "Data: " + f"({info})")
 
     # Filter key in JSON object.
     # Key in JSON always is string, some time one word without single or dabble quotes.
@@ -149,12 +149,11 @@ class LLMJSONToDict:
                 _last_rune = rune
                 self._cursor_start = self._cursor_end + 1
             # If last rune is '['
-            elif _last_rune == '[':
+            elif _last_rune == '[' and not _context_str:
                 if rune == ':':
                     # If rune have ':' in array, and it not in str context -> set Error
-                    if not _context_str:
-                        self._error_invalid_char("Array can't have ':'")
-                        return list()
+                    self._error_invalid_char("Array can't have ':'")
+                    return list()
                 if rune == ',':
                     # If rune have ',' in array - we create new part from self.context + 1 to self.context + _local_idx
                     # After set _local_idx
@@ -189,7 +188,7 @@ class LLMJSONToDict:
                     if self._error_status:
                         return list()
             # If last rune is '{'
-            elif _last_rune == '{':
+            elif _last_rune == '{' and not _context_str:
                 if rune == ':':
                     # If find ':' check comment.
                     #   If we haven't comment -> add key and open context_dict to add value
@@ -256,9 +255,8 @@ class LLMJSONToDict:
                         if self._error_status:
                             return list()
                     else:
-                        if not _context_comment:
-                            self._error("Unexpected end of object")
-                            return list()
+                        self._error("Unexpected end of object")
+                        return list()
 
 
             # For understand start and end index comment LLM

@@ -57,6 +57,16 @@ mocks = [
         "coordinates": [4.483605784808901, 51.907188449679325]
 }}
 """,
+    """
+{
+    "address": ["124241,  Feature"], // this is comment
+    "properties": {},
+    "geometry": { // this is comment
+        "type": "Point",
+        "coordinates": [4.483605784808901, 51.907188449679325]
+    }
+}
+    """
 ]
 
 worker = LLMJSONToDict()

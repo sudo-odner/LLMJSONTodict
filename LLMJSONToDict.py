@@ -20,10 +20,13 @@ class LLMJSONToDict:
 
     # Custom error
     def _error_invalid_char(self, info: str):
-        self._error("""Invalid characters. Use single or dabble quotes for siting.""" + "Data:" + info)
+        self._error("""Invalid characters. Use single or dabble quotes for siting.""" + "Data: " + f'"{info}"')
 
     def _error_invalid_dict(self):
         self._error("""Length of data key is not equal to length of data value""")
+
+    def _error_element_not_closed(self, info: str):
+        self._error("""Element is not closed""" + "Data: " + f'"{info}"')
 
     # Filter key in JSON object.
     # Key in JSON always is string, some time one word without single or dabble quotes.
@@ -261,10 +264,10 @@ class LLMJSONToDict:
             # For understand start and end index comment LLM
             if (not _context_comment) and (not _context_str) and (rune == '/' or rune == '#') and _last_rune != '':
                 _context_comment = True
-                _context_comment_index = self._cursor_end
+                _context_comment_index = self._cursor_end + 1
             if _context_comment and (not _context_str) and rune == '\n' and _last_rune != '':
                 _context_tab = True
-                _context_tab_index = self._cursor_end
+                _context_tab_index = self._cursor_end + 1
 
             # For understand context is string or not
             if (not _context_str) and (rune == "'" or rune == '"') and _last_rune != '':
@@ -275,7 +278,8 @@ class LLMJSONToDict:
                 _context_str = False
 
             self._cursor_end += 1
-        return parts
+        self._error_element_not_closed(_last_rune)
+        return list()
 
     def custom_load(self, json: str) -> (list | dict, str):
         self._new_text(json)

@@ -129,6 +129,8 @@ class LLMJSONToDict:
     # 2. Separation -> ',', ':', '}', ']'. They are necessary to perform the separation of elementsю
     # 3. Contextual -> '/', '#', '\n', '"', "'". They needed for understand reading rune. In data string? This is comment?
     def _next(self) -> list | dict:
+        _trigger_rune = ("{", "}", "[", "]", ":", ",")
+        _context_rune = ("'", '"', "#", "/", "\n")
         _last_rune = ""
 
         _context_value_dict = False
@@ -144,138 +146,128 @@ class LLMJSONToDict:
         parts = list()
         while self._cursor_end < len(self._text):
             rune = self._text[self._cursor_end]
-            # If last rune is not set
-            if _last_rune == '' and (rune == '{' or rune == '['):
-                _last_rune = rune
-                self._cursor_start = self._cursor_end + 1
-            # If last rune is '['
-            elif _last_rune == '[' and not _context_str:
-                if rune == ':':
-                    # If rune have ':' in array, and it not in str context -> set Error
-                    self._error_invalid_char("Array can't have ':'")
-                    return list()
-                if rune == ',':
-                    # If rune have ',' in array - we create new part from self.context + 1 to self.context + _local_idx
-                    # After set _local_idx
-                    # if part is '', not append in parts
-                    _element_part = self._text[self._cursor_start:self._cursor_end]
-                    self._cursor_start = self._cursor_end + 1
-                    if _element_part.strip() != '':
-                        parts.append(_element_part)
-                elif rune == ']':
-                    # If rune have ']' in array - we create last part from self.context + 1 to self.context + _local_idx
-                    # After set _local_idx
-                    # if part is '', not append in parts
-                    # After return from recursion
-                    _element_part = self._text[self._cursor_start:self._cursor_end]
-                    self._cursor_start = self._cursor_end + 1
-                    if _element_part.replace("\n", " ").strip() != "":
-                        parts.append(_element_part)
+            # Если rune - все кроме тригерных и контекстных rune, то мы идем дальше
+            if rune not in _trigger_rune and rune not in _context_rune:
+                self._cursor_end += 1
+                continue
 
-                    return self._create_array(parts)
-                elif rune == '}':
-                    # If rune have '}' in array - set error
-                    self._error("Unexpected end of array")
-                elif rune == '{' or rune == '[':
-                    # If find new object or array
-                    # Set new self._cursor_start += _local_idx, and set _local_idx
-                    # After recursion add new part
+            # Если не определена вложенность
+            if _last_rune == '':
+                # Если стартовая вложенность найдена
+                if rune == '{' or rune == '[':
+                    _last_rune = rune
+                self._cursor_end += 1
+                self._cursor_start = self._cursor_end
+                continue
+
+            # Условие если мы в тексте встречаем контекст строки
+            if rune == "'" or rune == '"':
+                # Смотрим если наш контекст типа строки был выключен и наша руна равна последней сохраненой в _last_str, то выключяем контекст строки
+                if _context_str and _last_str == rune:
+                    _last_str = ""
+                    _context_str = False
+                # Если до этого контекс не был включен, то включаем его
+                elif not _context_str:
+                    _last_str = rune
+                    _context_str = True
+
+                self._cursor_end += 1
+                continue
+
+            # Условие если нам всттречается тригерные и контекстные rune и при этом у нас сейчас ти строки
+            if _context_str:
+                self._cursor_end += 1
+                continue
+
+            # Если мы встретили комментарий
+            if rune == '/' or rune == '#':
+                _context_comment = True
+                self._cursor_end += 1
+                continue
+
+            # Если мы встретили '\n'
+            if rune == '\n':
+                if _context_comment:
+                    _context_comment = False
+                self._cursor_end += 1
+                self._cursor_start = self._cursor_end
+                continue
+
+            # Если мы находимся в коментарии то точно ничего добавлять не будем
+            if _context_comment:
+                self._cursor_end += 1
+                continue
+
+            if _last_rune == '[':
+                # Символы которые не должны попадаться в открытом массиве
+                if rune == ':' or rune == '}':
+                    # If rune have ':' or '}' in array - set error
+                    self._error(f"Invalid rune - '{rune}' in array.")
+                    return list()
+
+                # Если мы прошли все условия выше - то скорее всего мы будем добавлять элемент, или пропустим его
+                if rune == '[' or rune == '{':
+                    _element_part = self._text[self._cursor_start:self._cursor_end]
+                    self._cursor_start = self._cursor_end + 1
+                    self._cursor_end += 1
+                    if rune == ',':
+                        parts.append(_element_part)
+                    elif rune == ']':
+                        parts.append(_element_part)
+                        return self._create_array(parts)
+                else:
                     self._cursor_start = self._cursor_end
                     _element_part = self._next()
-                    self._cursor_start = self._cursor_end + 1
-                    parts.append(_element_part)
                     # If error inside then go out from recursion
                     if self._error_status:
                         return list()
-            # If last rune is '{'
-            elif _last_rune == '{' and not _context_str:
-                if rune == ':':
-                    # If find ':' check comment.
-                    #   If we haven't comment -> add key and open context_dict to add value
-                    #   Else wait when find \n, then add key and open context_dict to add value
-                    if _context_comment:
-                        if _context_tab:
-                            _element_part = self._text[_context_tab_index:self._cursor_end]
-                            self._cursor_start = self._cursor_end + 1
-                            if _element_part.strip() != '':
-                                parts.append(_element_part)
-                                _context_comment = False
-                                _context_tab = False
-                                _context_value_dict = True
-                            pass
-                        pass
-                    else:
-                        _element_part = self._text[self._cursor_start:self._cursor_end]
-                        self._cursor_start = self._cursor_end + 1
-                        if _element_part.strip() != '':
-                            parts.append(_element_part)
-                            _context_value_dict = True
-                            _context_comment = False
-                            _context_tab = False
-                elif rune == ',':
-                    # If find ',' check comment.
-                    #   If we have open context_dict -> add value
-                    #   Else next rune
-                    if _context_value_dict:
-                        _element_part = self._text[self._cursor_start:self._cursor_end]
-                        self._cursor_start = self._cursor_end + 1
-                        if _element_part.strip() != '':
+
+                    self._cursor_start = self._cursor_end + 1
+                    self._cursor_end += 1
+
+                    parts.append(_element_part)
+                continue
+
+            if _last_rune == '{':
+                # Символы которые не должны попадаться в открытом объекте
+                if rune == ']':
+                    self._error(f"Invalid rune - '{rune}' in object.")
+                    return dict()
+
+                if not(rune == '[' or rune == '{'):
+                    # Если мы прошли все условия выше - то скорее всего мы будем добавлять элемент, или пропустим его
+                    _element_part = self._text[self._cursor_start:self._cursor_end]
+                    self._cursor_start = self._cursor_end + 1
+                    self._cursor_end += 1
+                    if rune == ':' and _element_part.strip() != '':
+                        parts.append(_element_part)
+                        _context_value_dict = True
+                    elif rune == ',' and _context_value_dict:
+                        parts.append(_element_part)
+                        _context_value_dict = False
+                    elif rune == '}':
+                        if _context_value_dict:
                             parts.append(_element_part)
                             _context_value_dict = False
-                    else:
-                        self._cursor_start = self._cursor_end + 1
-                elif rune == '}':
-                    # If find '}' check comment.
-                    #   If we have open context_dict -> add value
-                    #   Else return dict
-                    if _context_value_dict:
-                        _element_part = self._text[self._cursor_start:self._cursor_end]
-                        self._cursor_start = self._cursor_end + 1
-                        if _element_part.replace("\n", " ").strip() != "":
-                            parts.append(_element_part)
 
-                    return self._create_dict(parts)
-                elif rune == ']':
-                    # If rune have ']' in array - set error
-                    if not _context_comment:
-                        self._error("Unexpected end of object")
-                        return list()
-                # If find new object or array
-                elif rune == '[' or rune == '{' :
-                    # If find new object or array
-                    # Set new self._cursor_start += _local_idx, and set _local_idx
-                    # After recursion add new part
+                        return self._create_dict(parts)
+                else:
                     if _context_value_dict:
                         self._cursor_start = self._cursor_end
                         _element_part = self._next()
-                        self._cursor_start = self._cursor_end + 1
-                        parts.append(_element_part)
-                        _context_value_dict = False
                         # If error inside then go out from recursion
                         if self._error_status:
                             return list()
+
+                        self._cursor_start = self._cursor_end + 1
+                        self._cursor_end += 1
+
+                        parts.append(_element_part)
                     else:
-                        self._error("Unexpected end of object")
+                        self._error("Key cannot be array or object")
                         return list()
+                continue
 
-
-            # For understand start and end index comment LLM
-            if (not _context_comment) and (not _context_str) and (rune == '/' or rune == '#') and _last_rune != '':
-                _context_comment = True
-                _context_comment_index = self._cursor_end + 1
-            if _context_comment and (not _context_str) and rune == '\n' and _last_rune != '':
-                _context_tab = True
-                _context_tab_index = self._cursor_end + 1
-
-            # For understand context is string or not
-            if (not _context_str) and (rune == "'" or rune == '"') and _last_rune != '':
-                _last_str = rune
-                _context_str = True
-            elif _context_str and (_last_str == rune):
-                _last_str = ""
-                _context_str = False
-
-            self._cursor_end += 1
         self._error_element_not_closed(_last_rune)
         return list()
 

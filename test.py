@@ -4,6 +4,12 @@ mocks = [
     """
     """,
     """
+    {"test": 1, "test2": 2}
+    """,
+    """
+    {"test": {d: 4, f:3}, "test2": 2}
+    """,
+    """
     {
       "type": "FeatureCollection",
       "features": [

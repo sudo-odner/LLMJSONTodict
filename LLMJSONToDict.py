@@ -1,47 +1,41 @@
 class LLMJSONToDict:
     def __init__(self, text):
+        # Настройки работы с текстом
         self._cursor_start = 0
         self._cursor_end = 0
         self._text = text
+        # Настройки для отладки и ошибок
         self._error_status = False
         self._error_info = ""
+        # Запуск основного алгоритма
         self._answer = self._next()
 
-    # Get answer
+    # Получить ответ
     def get(self) -> (dict | list, str):
         return self._answer, self._error_info
 
-    # Error if in recursion find error
+    # Для изменения статуса ошибки
     def _error(self, info: str):
         self._error_status = True
         self._error_info = info
 
-    # Custom error
-    def _error_invalid_char(self, info: str):
-        self._error("""Invalid characters. Use single or dabble quotes for siting.""" + "Data: " + f"({info})")
 
-    def _error_invalid_dict(self):
-        self._error("""Length of data key is not equal to length of data value""")
-
-    def _error_element_not_closed(self, info: str):
-        self._error("""Element is not closed""" + "Data: " + f"({info})")
-
-    # Filter key in JSON object.
-    # Key in JSON always is string, some time one word without single or dabble quotes.
-    # If _text is string with single or dabble quotes -> add all body inside like key
-    # Else _text without single or dabble quotes -> check space in name -> if True add key, else set Error
+    # Фильтр ключа JSON object(dict в Python).
+    # Ключ в JSON всегда имеет тип строки, но иногда указывают их без одинарной или двойной кавычки.
+    # Если text - это строка с двойными или одинарными кавычками, то добавляю все тело ключа (даже если слова разделены пробелом).
+    # Если text - это строка без двойных или одинарных кавычек, то проверяю что это слово(не словосочетание) и добавляю ключ.
     def _filter_key(self, text: str) -> str:
         text = text.strip()
         if (text[0] and text[-1] == "'") or (text[0] and text[-1] == '"'):
             return text[1:-1]
         else:
             if text.find(" ") != -1:
-                self._error_invalid_char(text)
+                self._error("""Invalid characters. Use single or dabble quotes for siting.""" + "Data: " + f"({info})")
             else:
                 return text
         return text
 
-    # For check float value
+    # Для проверки что строка это float
     def _is_float(self, element: any) -> bool:
         try:
             float(element)
@@ -49,18 +43,16 @@ class LLMJSONToDict:
         except ValueError:
             return False
 
-    # Filter value
-    # In JSON have some type: array(list), object(dict), string, number (integer | float), boolean, null(None)
-    # This code convert string, number (integer | float), boolean, null(None)
-    # If we have str with zero rune -> return None
+    # Фильтр значения
+    # В JSON есть несколько типов: array(list), объект(dict), string, number(integer | float), boolean, null(None)
+    # Этот код преобразует в тип string, number (integer | float), boolean, null(None)
+    # Если строка равна нулевой длинне, то вернем None
     def _filter_value(self, text: str | list | dict) -> list | dict | str | int | float | bool | None :
-        # If _text is array or dict, return array or dict
+        # Проверяем если мы получили массив или список то его возвращяем
         if (type(text) == list) or (type(text) == dict):
             return text
-        # Else data is not array and dict, set type
-        text = text.replace("\n", ' ')
+        # Фильтруем строку, убираем пробелы справо и слево
         text = text.strip()
-        # If _text is Zero return None
         if len(text) == 0:
             return None
         elif (text[0] and text[-1] == "'") or (text[0] and text[-1] == '"'):
@@ -78,27 +70,23 @@ class LLMJSONToDict:
         elif text.lower().find("none") != -1:
             return None
 
-        # If not found correct type -> set Error and return None.
-        self._error_invalid_char(text)
+        self._error("""Invalid characters. Use single or dabble quotes for siting.""" + "Data: " + f"({info})")
         return None
 
-    # Creating and filtering dict from array.
-    # Array created with pattern: first value -> key, second value -> value.
-    # Example: ["some", 1, "this is key", "this value"] -> {"some": 1, "this is key": "this value"}
-    # If we have different quantity key and value in array -> set Error.
+    # Создание и фильтрация dict из получаемого массива.
+    # Массив создан с патерном: [ключ, значение, ключ, значение]
+    # Если у нас есть разница в размерах массива ключ, значение, то вернем ошибку.
     def _create_dict(self, data: list) -> dict:
-        # Set key array and value array
+        # Разделяем массив на ключ и значение
         data_key, data_value = data[::2], data[1::2]
-        # If array key and value have different quantity -> set Error.
         if len(data_key) != len(data_value):
-            self._error_invalid_dict()
+            self._error("""Length of data key is not equal to length of data value""")
             return dict()
 
         new_dict = dict()
         for idx in range(len(data_key)):
-            # Create a key and a value with a filtered type.
+            # Фильтруем ключ и значение
             name_key, name_val = self._filter_key(data_key[idx]), self._filter_value(data_value[idx])
-            # Check state Error, if we get an error -> exit the loop, else continue.
             if self._error_status:
                 return dict()
             else:
@@ -106,14 +94,12 @@ class LLMJSONToDict:
 
         return new_dict
 
-    # Creating and filtering the received array
-    # If we have different quantity key and value in array -> set Error.
+    # Создание и фильтрация получаемого массива.
     def _create_array(self, data: list) -> list:
         new_array = list()
         for i in range(len(data)):
-            # Create a value with a filtered type.
+            # Фильтруем значение
             new_element = self._filter_value(data[i])
-            # Check state Error, if we get an error -> exit the loop, else continue.
             if self._error_status:
                 return list()
             else:
@@ -121,11 +107,12 @@ class LLMJSONToDict:
 
         return new_array
 
-    # Main function with recursion
-    # We have three types of trigger:
-    # 1. Deepening -> '{', '}', '[', ']'. They are necessary for deep recursion of the search for a certain type element.
-    # 2. Separation -> ',', ':', '}', ']'. They are necessary to perform the separation of elementsю
-    # 3. Contextual -> '/', '#', '\n', '"', "'". They needed for understand reading rune. In data string? This is comment?
+
+    # Основная функция с рекурсией
+    # У нас есть три типа триггеров:
+    # 1. Углубляющий -> '{', '}', '[', ']'. Они необходимы для глубокой рекурсии поиска элемента определенного типа.
+    # 2. Разделение -> ',', ':', '}', ']'. Они необходимы для выполнения разделения элементов.
+    # 3. Контекстное -> '/', '#', '\n', '"', "'". Они нужны для понимания контекста типа строки и комментария.
     def _next(self) -> list | dict:
         _trigger_rune = ("{", "}", "[", "]", ":", ",")
         _context_rune = ("'", '"', "#", "/", "\n")
@@ -297,7 +284,7 @@ class LLMJSONToDict:
                 continue
 
         if _last_rune != '':
-            self._error_element_not_closed(_last_rune)
+            self._error("""Element is not closed""" + "Data: " + f"({_last_rune})")
         else:
             self._error("Empty string.")
         return list()

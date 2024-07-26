@@ -298,7 +298,10 @@ class LLMJSONToDict:
                     return self._create_dict(parts)
                 continue
 
-        self._error_element_not_closed(_last_rune)
+        if _last_rune != '':
+            self._error_element_not_closed(_last_rune)
+        else:
+            self._error("Empty string.")
         return list()
 
     def custom_load(self, json: str) -> (list | dict, str):

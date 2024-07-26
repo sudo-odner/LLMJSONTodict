@@ -134,6 +134,7 @@ class LLMJSONToDict:
         _last_rune = ""
 
         _context_value_dict = False
+        _context_form_recurtion = False
 
         _context_comment = False
         _context_tab = False
@@ -249,13 +250,16 @@ class LLMJSONToDict:
                     if _context_value_dict:
                         self._cursor_start = self._cursor_end
                         _element_part = self._next()
-                        parts.append(_element_part)
+                        self._cursor_start = self._cursor_end
 
+                        parts.append(_element_part)
                         _context_value_dict = False
+                        _context_form_recurtion = True
 
                         # If error inside then go out from recursion
                         if self._error_status:
                             return list()
+                        continue
                     else:
                         self._error("Object hase type - key: value. Object or array can't been key")
                         return list()
@@ -271,6 +275,10 @@ class LLMJSONToDict:
                     parts.append(_element_part)
                     _context_value_dict = True
                 elif rune == ',':
+                    if _context_form_recurtion:
+                        _context_form_recurtion = False
+                        _context_value_dict = False
+                        continue
                     if not _context_value_dict:
                         self._error("Object hase type - key: value. Not - value:value.")
                         return list()
@@ -280,11 +288,14 @@ class LLMJSONToDict:
                 elif rune == '}':
                     if len(parts) == 0:
                         return dict()
-                    elif len(parts) % 2 == 0:
+                    if _context_form_recurtion:
+                        _context_form_recurtion = False
+                        _context_value_dict = False
                         return self._create_dict(parts)
-                    else:
-                        parts.append(_element_part)
-                        return self._create_dict(parts)
+
+                    parts.append(_element_part)
+                    _context_value_dict = False
+                    return self._create_dict(parts)
                 continue
 
         self._error_element_not_closed(_last_rune)

@@ -1,17 +1,15 @@
 class LLMJSONToDict:
-    def __init__(self):
+    def __init__(self, text):
         self._cursor_start = 0
         self._cursor_end = 0
-        self._text = ""
+        self._text = text
         self._error_status = False
         self._error_info = ""
+        self._answer = self._next()
 
-    def _new_text(self, new_text):
-        self._cursor_start = 0
-        self._cursor_end = 0
-        self._text = new_text
-        self._error_status = False
-        self._error_info = ""
+    # Get answer
+    def get(self) -> (dict | list, str):
+        return self._answer, self._error_info
 
     # Error if in recursion find error
     def _error(self, info: str):
@@ -303,9 +301,3 @@ class LLMJSONToDict:
         else:
             self._error("Empty string.")
         return list()
-
-    def custom_load(self, json: str) -> (list | dict, str):
-        self._new_text(json)
-
-        result, error = self._next(), self._error_info
-        return result, error

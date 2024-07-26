@@ -81,6 +81,5 @@ mocks = [
     """
 ]
 
-worker = LLMJSONToDict()
 for mock in mocks:
-    print(worker.custom_load(mock))
+    print(LLMJSONToDict(mock).get())

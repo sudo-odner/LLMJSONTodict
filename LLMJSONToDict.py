@@ -146,126 +146,145 @@ class LLMJSONToDict:
         parts = list()
         while self._cursor_end < len(self._text):
             rune = self._text[self._cursor_end]
-            # Если rune - все кроме тригерных и контекстных rune, то мы идем дальше
+            # Если на символ не является специалным символом, пропускаем его
             if rune not in _trigger_rune and rune not in _context_rune:
                 self._cursor_end += 1
                 continue
 
-            # Если не определена вложенность
+            # Если не определена вложенность, то все символы пропускаем
             if _last_rune == '':
-                # Если стартовая вложенность найдена
                 if rune == '{' or rune == '[':
                     _last_rune = rune
+                elif rune == '}':
+                    return dict()
+                elif rune == ']':
+                    return list()
+                # Сдвигаем курсор на следуйщей символ
                 self._cursor_end += 1
+                # Обвновляем курсор начало строки на следующий символ
                 self._cursor_start = self._cursor_end
                 continue
 
-            # Условие если мы в тексте встречаем контекст строки
+            # -----------------------------Проверка на то что строчка явялется типом строки-----------------------------
+            # Если мы нашли символ отвечающий за начало типа строки
             if rune == "'" or rune == '"':
-                # Смотрим если наш контекст типа строки был выключен и наша руна равна последней сохраненой в _last_str, то выключяем контекст строки
+                # Если контекст типа строки был включен и равен символу открывшего его, то выключаем контекст типа строки
                 if _context_str and _last_str == rune:
                     _last_str = ""
                     _context_str = False
-                # Если до этого контекс не был включен, то включаем его
+                # Если контекст строки не включен, то включаем его
                 elif not _context_str:
                     _last_str = rune
                     _context_str = True
-
+                # Сдвигаем курсор на следуйщей символ
                 self._cursor_end += 1
                 continue
 
-            # Условие если нам всттречается тригерные и контекстные rune и при этом у нас сейчас ти строки
+            # Если наш символ находится в срочке, то пропускаем его
             if _context_str:
                 self._cursor_end += 1
                 continue
-
-            # Если мы встретили комментарий
+            # ------------------------------Проверка на комментарии('/', '#') и табы('\n')------------------------------
+            # Если мы встретили комментарий, то учитываем что слудующие символы входят в коментарий
             if rune == '/' or rune == '#':
                 _context_comment = True
                 self._cursor_end += 1
                 continue
 
-            # Если мы встретили '\n'
+            # Если мы встретили '\n', то пропускаем его
             if rune == '\n':
+                # Если мы встретили '\n' и коментарий включен, то прекрощяем игнорирование
                 if _context_comment:
                     _context_comment = False
                 self._cursor_end += 1
                 self._cursor_start = self._cursor_end
                 continue
 
-            # Если мы находимся в коментарии то точно ничего добавлять не будем
+            # Если мы находимся в комментарии, то пропускаем специальные символы
             if _context_comment:
                 self._cursor_end += 1
                 continue
-
+            # ---------------------------------Условия, если вложенность массива('[')-----------------------------------
             if _last_rune == '[':
-                # Символы которые не должны попадаться в открытом массиве
+                # Символы, которые не должны попадаться в открытом массиве
                 if rune == ':' or rune == '}':
                     # If rune have ':' or '}' in array - set error
                     self._error(f"Invalid rune - '{rune}' in array.")
                     return list()
 
-                # Если мы прошли все условия выше - то скорее всего мы будем добавлять элемент, или пропустим его
+                _element_part = self._text[self._cursor_start:self._cursor_end]
+                _element_part = _element_part.strip()
+
+                # Если у нас появляется новая вложенность
                 if rune == '[' or rune == '{':
-                    _element_part = self._text[self._cursor_start:self._cursor_end]
-                    self._cursor_start = self._cursor_end + 1
-                    self._cursor_end += 1
-                    if rune == ',':
-                        parts.append(_element_part)
-                    elif rune == ']':
-                        parts.append(_element_part)
-                        return self._create_array(parts)
-                else:
                     self._cursor_start = self._cursor_end
                     _element_part = self._next()
+                    parts.append(_element_part)
+
                     # If error inside then go out from recursion
                     if self._error_status:
                         return list()
 
-                    self._cursor_start = self._cursor_end + 1
-                    self._cursor_end += 1
-
+                # Если все условия до этого были пройдены то скорее всего мы добавим новый элемент
+                self._cursor_start = self._cursor_end + 1
+                self._cursor_end += 1
+                if rune == ',':
                     parts.append(_element_part)
+                elif rune == ']':
+                    parts.append(_element_part)
+                    return self._create_array(parts)
                 continue
-
+            # ---------------------------------Условия, если вложенность объекта('{')-----------------------------------
             if _last_rune == '{':
                 # Символы которые не должны попадаться в открытом объекте
                 if rune == ']':
                     self._error(f"Invalid rune - '{rune}' in object.")
                     return dict()
 
-                if not(rune == '[' or rune == '{'):
-                    # Если мы прошли все условия выше - то скорее всего мы будем добавлять элемент, или пропустим его
-                    _element_part = self._text[self._cursor_start:self._cursor_end]
-                    self._cursor_start = self._cursor_end + 1
-                    self._cursor_end += 1
-                    if rune == ':' and _element_part.strip() != '':
-                        parts.append(_element_part)
-                        _context_value_dict = True
-                    elif rune == ',' and _context_value_dict:
-                        parts.append(_element_part)
-                        _context_value_dict = False
-                    elif rune == '}':
-                        if _context_value_dict:
-                            parts.append(_element_part)
-                            _context_value_dict = False
+                _element_part = self._text[self._cursor_start:self._cursor_end]
+                _element_part = _element_part.strip()
 
-                        return self._create_dict(parts)
-                else:
+                # Если у нас появляется новая вложенность
+                if rune == '[' or rune == '{':
                     if _context_value_dict:
                         self._cursor_start = self._cursor_end
                         _element_part = self._next()
+                        parts.append(_element_part)
+
+                        _context_value_dict = False
+
                         # If error inside then go out from recursion
                         if self._error_status:
                             return list()
-
-                        self._cursor_start = self._cursor_end + 1
-                        self._cursor_end += 1
-
-                        parts.append(_element_part)
                     else:
-                        self._error("Key cannot be array or object")
+                        self._error("Object hase type - key: value. Object or array can't been key")
                         return list()
+
+                self._cursor_start = self._cursor_end + 1
+                self._cursor_end += 1
+                # Если у нас спецальные символы разделители
+                if rune == ':':
+                    if _context_value_dict:
+                        self._error("Object hase type - key: value. Not - key:key:value.")
+                        return list()
+
+                    parts.append(_element_part)
+                    _context_value_dict = True
+                elif rune == ',':
+                    if not _context_value_dict:
+                        self._error("Object hase type - key: value. Not - value:value.")
+                        return list()
+
+                    parts.append(_element_part)
+                    _context_value_dict = False
+                elif rune == '}':
+                    if len(parts) == 0:
+                        return dict()
+                    elif len(parts) % 2 == 0:
+                        return self._create_dict(parts)
+                    else:
+                        parts.append(_element_part)
+                        return self._create_dict(parts)
                 continue
 
         self._error_element_not_closed(_last_rune)

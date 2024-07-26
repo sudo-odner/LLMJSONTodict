@@ -2,6 +2,18 @@ from LLMJSONToDict import LLMJSONToDict
 
 mocks = [
     """
+    {some: 1, some: {other: 2}}
+    """,
+    """
+    {some: 1, some: {other: 2}, other: {other: 3}}
+    """,
+    """
+    """,
+    """
+    {"test": 1, "test2": 2}
+    """,
+    """
+    {"test": {d: 4, f:3}, "test2": 2}
     """,
     """
     {
@@ -69,6 +81,5 @@ mocks = [
     """
 ]
 
-worker = LLMJSONToDict()
 for mock in mocks:
-    print(worker.custom_load(mock))
+    print(LLMJSONToDict(mock).get())

@@ -142,10 +142,6 @@ class LLMJSONToDict:
             if _last_rune == '':
                 if rune in '{' or rune == '[':
                     _last_rune = rune
-                elif rune == '}':
-                    return dict()
-                elif rune == ']':
-                    return list()
                 # Сдвигаем курсор на следуйщей символ
                 self._cursor_end += 1
                 # Обвновляем курсор начало строки на следующий символ
@@ -219,6 +215,8 @@ class LLMJSONToDict:
                 if rune == ',':
                     parts.append(_element_part)
                 elif rune == ']':
+                    if len(parts) == 0:
+                        return list()
                     parts.append(_element_part)
                     return self._create_array(parts)
                 continue

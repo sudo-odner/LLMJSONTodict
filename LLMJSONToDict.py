@@ -12,6 +12,7 @@ class LLMJSONToDict:
 
     # Получить ответ
     def get(self) -> (dict | list, str):
+        #
         return self._answer, self._error_info
 
     # Для изменения статуса ошибки
@@ -30,7 +31,7 @@ class LLMJSONToDict:
             return text[1:-1]
         else:
             if text.find(" ") != -1:
-                self._error("""Invalid characters. Use single or dabble quotes for siting.""" + "Data: " + f"({info})")
+                self._error("""Invalid characters. Use single or dabble quotes for siting.""" + "Data: " + f"({text})")
             else:
                 return text
         return text
@@ -70,7 +71,7 @@ class LLMJSONToDict:
         elif text.lower().find("none") != -1:
             return None
 
-        self._error("""Invalid characters. Use single or dabble quotes for siting.""" + "Data: " + f"({info})")
+        self._error("""Invalid characters. Use single or dabble quotes for siting.""" + "Data: " + f"({text})")
         return None
 
     # Создание и фильтрация dict из получаемого массива.
@@ -139,7 +140,7 @@ class LLMJSONToDict:
 
             # Если не определена вложенность, то все символы пропускаем
             if _last_rune == '':
-                if rune == '{' or rune == '[':
+                if rune in '{' or rune == '[':
                     _last_rune = rune
                 elif rune == '}':
                     return dict()

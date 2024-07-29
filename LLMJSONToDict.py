@@ -217,7 +217,7 @@ class LLMJSONToDict:
                 if rune == ',':
                     parts.append(_element_part)
                 elif rune == ']':
-                    if len(parts) == 0:
+                    if len(parts) == 0 and len(_element_part) == 0:
                         return list()
                     if _context_form_recurtion:
                         _context_form_recurtion = False
@@ -276,7 +276,7 @@ class LLMJSONToDict:
                     parts.append(_element_part)
                     _context_value_dict = False
                 elif rune == '}':
-                    if len(parts) == 0:
+                    if len(parts) == 0 and len(_element_part) == 0:
                         return dict()
                     if _context_form_recurtion:
                         _context_form_recurtion = False
@@ -289,7 +289,7 @@ class LLMJSONToDict:
                 continue
 
         if _last_rune != '':
-            self._error("""Element is not closed""" + "Data: " + f"({_last_rune})")
+            self._error("""Element is not closed""" + "Data: " + f"( {_last_rune} )")
         else:
             self._error("Empty string.")
         return list()

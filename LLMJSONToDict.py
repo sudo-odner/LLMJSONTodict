@@ -1,5 +1,4 @@
-class \
-        LLMJSONToDict:
+class LLMJSONToDict:
     def __init__(self, text):
         # Настройки работы с текстом
         self._cursor_start = 0

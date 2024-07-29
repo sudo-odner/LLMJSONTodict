@@ -2,7 +2,7 @@ from LLMJSONToDict import LLMJSONToDict
 
 mocks = [
     """
-    {some: 1, some: {other: 2}}
+    {some: 1, some: []}
     """,
     """
     {

@@ -183,8 +183,9 @@ class LLMJSONToDict:
                 # Если мы встретили '\n' и коментарий включен, то прекрощяем игнорирование
                 if _context_comment:
                     _context_comment = False
+                    self._cursor_start = self._cursor_end + 1
+                self._text = self._text[:self._cursor_end] + ' ' + self._text[self._cursor_end + 1:]
                 self._cursor_end += 1
-                self._cursor_start = self._cursor_end
                 continue
 
             # Если мы находимся в комментарии, то пропускаем специальные символы

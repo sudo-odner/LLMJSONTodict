@@ -5,7 +5,11 @@ mocks = [
     {some: 1, some: {other: 2}}
     """,
     """
-    {some: 1, some: {other: 2}, some: 23}
+    {
+        some: 1,
+        some: {other: 2},
+        some: 23
+    }
     """,
     """
     {some: 1, some: {other: 2}, other: {other: 3}}

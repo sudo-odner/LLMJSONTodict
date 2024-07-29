@@ -5,6 +5,9 @@ mocks = [
     {some: 1, some: {other: 2}}
     """,
     """
+    {some: 1, some: {other: 2}, some: 23}
+    """,
+    """
     {some: 1, some: {other: 2}, other: {other: 3}}
     """,
     """
@@ -74,8 +77,8 @@ mocks = [
     "address": ["124241,  Feature"], // this is comment
     "properties": {},
     "geometry": { // this is comment
-        "type": "Point",
-        "coordinates": [4.483605784808901, 51.907188449679325]
+        "type": "Point", // this is comment
+        "coordinates": [4.483605784808901,   51.907188449679325]
     }
 }
     """

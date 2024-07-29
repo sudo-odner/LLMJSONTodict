@@ -205,6 +205,8 @@ class LLMJSONToDict:
                     _element_part = self._next()
                     parts.append(_element_part)
 
+                    _context_form_recurtion = True
+
                     # If error inside then go out from recursion
                     if self._error_status:
                         return list()
@@ -217,6 +219,9 @@ class LLMJSONToDict:
                 elif rune == ']':
                     if len(parts) == 0:
                         return list()
+                    if _context_form_recurtion:
+                        _context_form_recurtion = False
+                        return self._create_array(parts)
                     parts.append(_element_part)
                     return self._create_array(parts)
                 continue

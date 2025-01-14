@@ -31,33 +31,37 @@ def _gen_stack_data(text: str) -> (List[Tuple[str, str]], bool, str):
     _target - элементы определния типов (тип элемента, символ начала, символ окончания)
     """
     # Находим начало JSON объекта
-    idx_start = text.find("{") + 1
-    if idx_start - 1 == -1:
+    idx_start_object = text.find("{")
+    if text.find("{") == -1:
         # Мы не нашли объект. Можно сделать более строго
         return [("object", "{"), ("object", "}")], True, ""
+    text = text[idx_start_object:]
 
     _target = [("object", "{", "}"),
                ("array", "[", "]"),
                ("comment", "#", "\n"), ("comment", "//", "\n"), ("comment", "/*", "*/"),
                ("string", "'", "'"), ("string", '"', '"')]
 
-    _stack: List[Tuple[str, str, str]] = [("object", "{", "}")]
-    _stack_data: List[Tuple[str, str]] = [("object", "{")]
-    _back_string: int = idx_start
-    _front_string: int = idx_start
-    for _ in range(idx_start + 2, len(text)):
+    _stack: List[Tuple[str, str, str]] = []
+    _stack_data: List[Tuple[str, str]] = []
+    _back_string: int = 0
+    _front_string: int = 0
+    while _front_string < len(text):
+        # some = text[_front_string]
         # Если последний элемент был началом строчки
         if _stack and _stack[-1][0] == "string":
             if text.startswith(_stack[-1][2], _front_string):
                 _stack_data.append(("string", text[_back_string:_front_string]))
-                _back_string = _front_string = _front_string + 1
+                _back_string = _front_string + 1
+                _front_string += 1
                 _stack.pop()
             else:
                 _front_string += 1
         # Если последний элемент был началом комментария
         elif _stack and _stack[-1][0] == "comment":
             if text.startswith(_stack[-1][2], _front_string):
-                _back_string = _front_string = _front_string + 1
+                _back_string = _front_string + 1
+                _front_string += 1
                 _stack.pop()
             else:
                 _front_string += 1
@@ -99,7 +103,8 @@ def _gen_stack_data(text: str) -> (List[Tuple[str, str]], bool, str):
                         _back_string = _front_string + 1
                         _stack.pop()
 
-                    _front_string += 1
+                _front_string += 1
+
 
     if _stack:
         # Проблема с вложенностью (она не закрыта)

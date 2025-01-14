@@ -1,4 +1,9 @@
-from LLMJSONToDict import LLMJSONToDict
+import json
+
+from LLMJSONDecoder import custom_json_load
+from est import LLMJSONDecoder
+
+# from LLMJSONToDict2 import LLMJSONDecoder
 
 mocks = [
     """
@@ -79,14 +84,43 @@ mocks = [
     """
 {
     "address": ["124241,  Feature"], // this is comment
+    properties: {},
+    "geometry": { // this is comment
+        "type": "Point", // this is comment
+        "coordinates": [4.483605784808901,   51.907188449679325]
+    }
+}
+    """,
+    """
+{
+    "address": ["124241,  '// this is not comment, Feature"], // this is comment
     "properties": {},
     "geometry": { // this is comment
         "type": "Point", // this is comment
         "coordinates": [4.483605784808901,   51.907188449679325]
     }
 }
+    """,
+    """{
+"person": [{
+"LastName": "Хорошков",
+"firstName": "Никита",
+"middleName": "Олегович",
+"jobTitle": "Генеральный Директор"
+}]
+}
+    """,
+    """{/*
+"person": [{
+"LastName": "Хорошков",
+"firstName": "Никита",*/
+"middleName": "Олегович",
+"jobTitle": "Генеральный Директор"
+}]
+}
     """
 ]
 
 for mock in mocks:
-    print(LLMJSONToDict(mock).get())
+    print(mock)
+    print(custom_json_load(mock))
